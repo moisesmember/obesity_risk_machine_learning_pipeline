@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Governed local data. Raw snapshots are immutable and identified by their manifests,
+# but dataset contents and temporary downloads must not be committed to Git.
+/data/raw/
+/data/staging/
