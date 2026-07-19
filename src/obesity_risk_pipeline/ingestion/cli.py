@@ -15,7 +15,10 @@ from obesity_risk_pipeline.ingestion.service import IngestionError, KaggleIngest
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Download and publish the governed obesity dataset from Kaggle."
+        description=(
+            "Ensure the governed obesity dataset is available, downloading it from "
+            "Kaggle only when the validated snapshot does not exist."
+        )
     )
     parser.add_argument("--dataset-slug", help="Kaggle slug in owner/dataset format")
     parser.add_argument("--expected-sha256", help="Governed SHA-256 of the CSV")
@@ -63,13 +66,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.getLogger(__name__).error("Ingestion failed: %s", exc)
         return 1
 
-    logging.getLogger(__name__).info(
-        "Ingestion completed: path=%s rows=%d sha256=%s reused=%s",
-        result.dataset_path,
-        result.row_count,
-        result.sha256,
-        result.reused_existing_snapshot,
-    )
+    logger = logging.getLogger(__name__)
+    if result.reused_existing_snapshot:
+        logger.info(
+            "Initialization completed: dataset already existed; download skipped. "
+            "path=%s rows=%d sha256=%s",
+            result.dataset_path,
+            result.row_count,
+            result.sha256,
+        )
+    else:
+        logger.info(
+            "Initialization completed: missing dataset imported successfully. "
+            "path=%s rows=%d sha256=%s",
+            result.dataset_path,
+            result.row_count,
+            result.sha256,
+        )
     return 0
 
 

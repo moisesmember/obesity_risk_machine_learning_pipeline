@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 
 [project.scripts]
 obesity-ingest-kaggle = "obesity_risk_pipeline.ingestion.cli:main"
+obesity-initialize = "obesity_risk_pipeline.ingestion.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -63,14 +63,22 @@ class KaggleIngestionService:
         except DatasetValidationError as exc:
             raise IngestionError(str(exc)) from exc
         if existing is not None:
+            LOGGER.info(
+                "Governed dataset already exists and is valid at %s; "
+                "skipping Kaggle download",
+                existing.dataset_path,
+            )
             return existing
 
+        LOGGER.info(
+            "Governed dataset is absent; importing %s from Kaggle",
+            self._settings.dataset_slug,
+        )
         self._settings.staging_root.mkdir(parents=True, exist_ok=True)
         staging_directory = Path(
             tempfile.mkdtemp(prefix="kaggle-ingest-", dir=self._settings.staging_root)
         )
         try:
-            LOGGER.info("Downloading Kaggle dataset %s", self._settings.dataset_slug)
             self._downloader.download(
                 self._settings.dataset_slug,
                 staging_directory,

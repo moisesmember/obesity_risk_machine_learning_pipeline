@@ -136,8 +136,8 @@ py -m venv .venv
 python -m pip install -r requirements.txt
 python -m pip install -e .
 
-# ingestão do snapshot Kaggle fixado por hash
-obesity-ingest-kaggle
+# inicialização idempotente: valida o snapshot existente ou importa do Kaggle
+obesity-initialize
 
 # testes
 python -m pytest
@@ -153,6 +153,8 @@ implementação verificável.
 ## Critérios de aceite iniciais
 
 - A ingestão baixa por um adaptador Kaggle isolado e nunca publica download parcial.
+- A inicialização reutiliza um snapshot existente somente após validar sua integridade;
+  quando ele não existe, executa a ingestão automaticamente.
 - O schema, o target, a unicidade do `id` e o hash esperado são validados antes da
   publicação.
 - O raw é versionado por SHA-256, não é sobrescrito e a repetição é idempotente.

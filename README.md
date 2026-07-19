@@ -185,14 +185,15 @@ Configure a credencial do Kaggle em `KAGGLE_API_TOKEN`, nas variáveis legadas
 `KAGGLE_USERNAME` e `KAGGLE_KEY` ou no arquivo oficial `kaggle.json`. Nunca versione a
 credencial; use [.env.example](.env.example) apenas como referência.
 
-Com o ambiente virtual ativo e o pacote instalado, execute:
+Com o ambiente virtual ativo e o pacote instalado, inicialize os dados:
 
 ```bash
-obesity-ingest-kaggle
+obesity-initialize
 ```
 
-O comando baixa em staging isolado, valida schema, domínios, identificadores,
-duplicatas, classes e SHA-256 e somente então publica:
+Se o snapshot já existir, o comando valida sua integridade e pula o download. Se não
+existir, baixa em staging isolado, valida schema, domínios, identificadores, duplicatas,
+classes e SHA-256 e somente então publica:
 
 ```text
 data/raw/obesity_risk_dataset/<sha256>/
@@ -272,6 +273,7 @@ Depois da primeira instalação, o fluxo usual de desenvolvimento é:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+obesity-initialize
 docker compose up --build -d
 python -m jupyter lab
 ```

@@ -2,10 +2,12 @@
 
 ## Objetivo
 
-O comando `obesity-ingest-kaggle` baixa o dataset configurado, valida seu contrato e
-publica um snapshot raw imutável. O código de domínio não depende diretamente do
-Kaggle: o acesso externo fica no adaptador `KaggleApiDownloader` e pode ser substituído
-por um fake nos testes ou por outro provedor no futuro.
+O comando de inicialização `obesity-initialize` garante que o dataset configurado esteja
+disponível. Ele valida e reutiliza o snapshot governado quando já existe; caso
+contrário, baixa do Kaggle, valida o contrato e publica um snapshot raw imutável. O
+código de domínio não depende diretamente do Kaggle: o acesso externo fica no adaptador
+`KaggleApiDownloader` e pode ser substituído por um fake nos testes ou por outro
+provedor no futuro.
 
 ## Fluxo
 
@@ -24,6 +26,26 @@ Downloads parciais e arquivos inválidos nunca são publicados em `data/raw`. Um
 execução com o mesmo hash verifica e reutiliza o snapshot existente sem chamar a API.
 Nenhum snapshot anterior é sobrescrito.
 
+## Inicialização idempotente
+
+Execute durante o bootstrap local:
+
+```bash
+obesity-initialize
+```
+
+O comando segue esta decisão:
+
+```text
+snapshot esperado existe?
+  sim -> validar CSV + manifesto + SHA-256 -> reutilizar e pular download
+  não -> baixar no staging -> validar -> publicar snapshot imutável
+```
+
+Um diretório incompleto, manifesto adulterado ou CSV com hash diferente não é tratado
+como dataset existente válido. A inicialização falha de forma acionável e preserva o
+conteúdo para investigação, em vez de sobrescrevê-lo.
+
 ## Autenticação
 
 Configure a autenticação conforme o cliente oficial do Kaggle. As opções suportadas
@@ -41,7 +63,7 @@ ao ambiente do processo ou a um secret manager e nunca devem ser versionadas.
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install -e .
-obesity-ingest-kaggle
+obesity-initialize
 ```
 
 O snapshot esperado no contrato atual é:
@@ -81,7 +103,7 @@ e o observado. Não desabilite essa validação. Para adotar a nova versão:
 Também é possível informar um hash já revisado explicitamente:
 
 ```bash
-obesity-ingest-kaggle --expected-sha256 <SHA256_REVISADO>
+obesity-initialize --expected-sha256 <SHA256_REVISADO>
 ```
 
 ## Falhas esperadas
