@@ -14,6 +14,8 @@ O projeto usa como fonte de dados o
 - [Contexto de negócio e contrato do dataset](docs/BUSINESS_CONTEXT.md): descreve o
   problema, a proveniência, todas as colunas, cardinalidades, distribuições, padrões,
   alvo, riscos e decisões pendentes da pipeline.
+- [Ingestão governada do Kaggle](docs/INGESTION.md): explica autenticação, validação,
+  publicação imutável, manifesto, idempotência e atualização da fonte.
 
 ## Contexto do problema
 
@@ -164,6 +166,7 @@ Atualize o instalador e instale as dependências principais:
 ```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Para executar também os benchmarks opcionais:
@@ -178,31 +181,29 @@ adicionais no Windows.
 
 ## Obtenção dos dados
 
-Depois de configurar as credenciais da API do Kaggle, crie o diretório de dados e
-baixe o dataset sem alterar os arquivos originais.
+Configure a credencial do Kaggle em `KAGGLE_API_TOKEN`, nas variáveis legadas
+`KAGGLE_USERNAME` e `KAGGLE_KEY` ou no arquivo oficial `kaggle.json`. Nunca versione a
+credencial; use [.env.example](.env.example) apenas como referência.
 
-No Windows, usando PowerShell:
-
-```powershell
-New-Item -ItemType Directory -Force data\raw
-kaggle datasets download -d jpkochar/obesity-risk-dataset -p data\raw --unzip
-```
-
-No Linux ou macOS:
+Com o ambiente virtual ativo e o pacote instalado, execute:
 
 ```bash
-mkdir -p data/raw
-kaggle datasets download -d jpkochar/obesity-risk-dataset -p data/raw --unzip
+obesity-ingest-kaggle
 ```
 
-Também é possível fazer o download manual na
-[página do dataset](https://www.kaggle.com/datasets/jpkochar/obesity-risk-dataset) e
-extrair os arquivos em `data/raw/`.
+O comando baixa em staging isolado, valida schema, domínios, identificadores,
+duplicatas, classes e SHA-256 e somente então publica:
 
-Os dados em `data/raw/` devem ser tratados como imutáveis. Limpeza, conversões e
-divisões de treino devem gerar novas saídas em diretórios próprios, sem sobrescrever a
-fonte original. Verifique também os termos e a licença apresentados pelo Kaggle antes
-de redistribuir os dados.
+```text
+data/raw/obesity_risk_dataset/<sha256>/
+├── obesity_level.csv
+└── manifest.json
+```
+
+O raw é imutável e uma repetição reutiliza o mesmo snapshot sem sobrescrevê-lo. Se a
+fonte mudar, a ingestão falhará por divergência de hash até que a nova versão seja
+auditada e o contrato seja atualizado intencionalmente. Consulte o
+[guia de ingestão](docs/INGESTION.md) para detalhes.
 
 ## Infraestrutura local com Docker Compose
 

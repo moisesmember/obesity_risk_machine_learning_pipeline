@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "obesity-risk-machine-learning-pipeline"
+version = "0.1.0"
+description = "Governed machine-learning pipeline for obesity-level classification"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.scripts]
+obesity-ingest-kaggle = "obesity_risk_pipeline.ingestion.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
