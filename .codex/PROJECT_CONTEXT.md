@@ -103,8 +103,10 @@
 - Artefatos iniciais obrigatórios da ingestão: CSV raw imutável e `manifest.json` com
   proveniência, hash, tamanho, schema, contagens e timestamp UTC.
 - Object storage previsto: MinIO; banco de metadados previsto: PostgreSQL.
-- Snapshots de dados no MinIO: bucket `fraud-detection`, prefixo
+- Snapshots de dados no MinIO: bucket `obesity-risk-datasets`, prefixo
   `datasets/obesity_risk_dataset/<sha256>/`, com CSV e manifesto imutáveis.
+- Artefatos do MLflow no MinIO: bucket `obesity-risk-mlflow`, prefixo `artifacts/`;
+  ambos os buckets são criados de forma idempotente pelo bootstrap do Compose.
 - Gates, baseline de produção, registry, rollback, retenção e responsável por aprovação
   humana: em aberto.
 - Não há promoção automática autorizada.

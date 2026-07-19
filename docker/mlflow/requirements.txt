@@ -1,0 +1,4 @@
+# Dependências diretas exclusivas do tracking server, fixadas para controlar compatibilidade.
+mlflow==3.14.0
+psycopg[binary]==3.3.4
+boto3==1.43.51
