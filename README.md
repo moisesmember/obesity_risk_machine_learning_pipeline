@@ -16,6 +16,8 @@ O projeto usa como fonte de dados o
   alvo, riscos e decisões pendentes da pipeline.
 - [Ingestão governada do Kaggle](docs/INGESTION.md): explica autenticação, validação,
   publicação imutável, manifesto, idempotência e atualização da fonte.
+- [Notebook de exploração conectado ao MinIO](notebooks/01_data_exploration_minio.ipynb):
+  inicializa o dataset, sincroniza o snapshot e inicia a análise exploratória.
 
 ## Contexto do problema
 
@@ -246,15 +248,21 @@ nunca versione segredos.
 
 ## Execução dos notebooks
 
-Com o ambiente virtual ativo e as dependências instaladas, inicie o JupyterLab a partir
-da raiz do projeto:
+Com o ambiente virtual ativo e as dependências instaladas, inicie o MinIO:
 
 ```bash
-python -m jupyter lab
+docker compose up -d minio
 ```
 
-O navegador abrirá a interface local do Jupyter. Acesse o diretório `notebooks/`, abra
-o notebook desejado e selecione o kernel Python associado ao ambiente `.venv`.
+Depois, abra diretamente o notebook de exploração:
+
+```bash
+python -m jupyter lab notebooks/01_data_exploration_minio.ipynb
+```
+
+O notebook reutiliza a ingestão governada, cria o bucket local quando necessário,
+publica ou valida os objetos versionados por SHA-256 e lê o CSV diretamente do MinIO
+para um DataFrame Pandas. Selecione o kernel Python associado ao ambiente `.venv`.
 
 Para executar um notebook completo pela linha de comando, depois que ele existir no
 projeto, use:
@@ -263,9 +271,8 @@ projeto, use:
 python -m jupyter nbconvert --to notebook --execute notebooks/<NOME_DO_NOTEBOOK>.ipynb --output <NOME_DO_NOTEBOOK>_executado.ipynb
 ```
 
-> O repositório ainda não contém notebooks versionados. Crie o diretório `notebooks/`
-> para os trabalhos exploratórios e mantenha a lógica reutilizável da pipeline em
-> módulos Python, em vez de deixá-la exclusivamente no notebook.
+Mantenha novas análises no diretório `notebooks/`, mas mova transformações reutilizáveis
+para módulos Python testáveis em `src/`.
 
 ## Fluxo rápido de inicialização
 
@@ -274,8 +281,8 @@ Depois da primeira instalação, o fluxo usual de desenvolvimento é:
 ```powershell
 .\.venv\Scripts\Activate.ps1
 obesity-initialize
-docker compose up --build -d
-python -m jupyter lab
+docker compose up -d minio
+python -m jupyter lab notebooks/01_data_exploration_minio.ipynb
 ```
 
 Ao finalizar:

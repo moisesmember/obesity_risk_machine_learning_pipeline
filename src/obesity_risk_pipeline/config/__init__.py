@@ -5,9 +5,12 @@ from obesity_risk_pipeline.config.settings import (
     IngestionSettings,
     load_ingestion_settings,
 )
+from obesity_risk_pipeline.config.minio import MinioSettings, load_minio_settings
 
 __all__ = [
     "DEFAULT_DATASET_SHA256",
     "IngestionSettings",
+    "MinioSettings",
     "load_ingestion_settings",
+    "load_minio_settings",
 ]

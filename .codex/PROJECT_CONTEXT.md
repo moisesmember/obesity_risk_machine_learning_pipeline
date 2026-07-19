@@ -103,6 +103,8 @@
 - Artefatos iniciais obrigatórios da ingestão: CSV raw imutável e `manifest.json` com
   proveniência, hash, tamanho, schema, contagens e timestamp UTC.
 - Object storage previsto: MinIO; banco de metadados previsto: PostgreSQL.
+- Snapshots de dados no MinIO: bucket `fraud-detection`, prefixo
+  `datasets/obesity_risk_dataset/<sha256>/`, com CSV e manifesto imutáveis.
 - Gates, baseline de produção, registry, rollback, retenção e responsável por aprovação
   humana: em aberto.
 - Não há promoção automática autorizada.
@@ -145,6 +147,10 @@ python -m pytest
 # infraestrutura local
 docker compose config
 docker compose up --build -d
+
+# exploração conectada ao MinIO
+docker compose up -d minio
+python -m jupyter lab notebooks/01_data_exploration_minio.ipynb
 ```
 
 Treino, inferência, lint, type-check, migrations e gates de promoção ainda não possuem

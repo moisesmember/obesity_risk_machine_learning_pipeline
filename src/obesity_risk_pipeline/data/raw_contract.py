@@ -101,7 +101,9 @@ _NUMERIC_RANGES: Final[dict[str, NumericRange]] = {
 }
 
 
-def _sha256(path: Path) -> str:
+def calculate_sha256(path: Path) -> str:
+    """Calculate a file SHA-256 without loading the whole artifact into memory."""
+
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -217,7 +219,7 @@ def validate_raw_dataset(
         )
 
     return DatasetProfile(
-        sha256=_sha256(path),
+        sha256=calculate_sha256(path),
         byte_size=path.stat().st_size,
         row_count=row_count,
         columns=active_contract.columns,

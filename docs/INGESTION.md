@@ -88,6 +88,21 @@ O manifesto contém somente metadados não sensíveis:
 
 Ele não contém credenciais nem exemplos de pessoas.
 
+## Sincronização com MinIO
+
+O notebook
+[`notebooks/01_data_exploration_minio.ipynb`](../notebooks/01_data_exploration_minio.ipynb)
+reutiliza o snapshot governado e o publica no MinIO sob:
+
+```text
+s3://fraud-detection/datasets/obesity_risk_dataset/<sha256>/
+├── obesity_level.csv
+└── manifest.json
+```
+
+Objetos existentes só são reutilizados quando tamanho e metadados de hash coincidem.
+Conflitos interrompem a execução e nunca provocam sobrescrita silenciosa.
+
 ## Atualização intencional da fonte
 
 Se o Kaggle publicar um arquivo diferente, o comando falhará informando o hash esperado
