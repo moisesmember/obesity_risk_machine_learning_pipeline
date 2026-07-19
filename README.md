@@ -9,6 +9,12 @@ O projeto usa como fonte de dados o
 > modelos não constituem diagnóstico médico nem substituem a avaliação de um
 > profissional de saúde.
 
+## Documentação do projeto
+
+- [Contexto de negócio e contrato do dataset](docs/BUSINESS_CONTEXT.md): descreve o
+  problema, a proveniência, todas as colunas, cardinalidades, distribuições, padrões,
+  alvo, riscos e decisões pendentes da pipeline.
+
 ## Contexto do problema
 
 A obesidade é influenciada por diferentes fatores físicos e comportamentais. Nesse
