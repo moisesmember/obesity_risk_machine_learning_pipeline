@@ -108,6 +108,10 @@
 - Gates, baseline de produção, registry, rollback, retenção e responsável por aprovação
   humana: em aberto.
 - Não há promoção automática autorizada.
+- O GitHub Actions executa o check `quality-gate` em pull requests e pushes para
+  `main`; a proteção da branch deve exigir esse check antes do merge.
+- O destino e a estratégia de deploy permanecem em aberto; o workflow atual não
+  publica nem promove artefatos.
 
 ## Inferência e operação
 
@@ -144,6 +148,13 @@ obesity-initialize
 # testes
 python -m pytest
 
+# mesmo quality gate executado pelo GitHub Actions
+python -m pip install -r requirements-ci.txt
+python -m pip install --no-deps -e .
+python -m compileall -q src tests
+docker compose config --quiet
+python -m pytest -q tests/unit
+
 # infraestrutura local
 docker compose config
 docker compose up --build -d
@@ -178,3 +189,5 @@ implementação verificável.
 - Métricas e gates numéricos de promoção.
 - Política de disponibilidade do MLflow.
 - Contrato de inferência, SLA, monitoramento e aprovação humana.
+- Destino de deploy, artefato implantável, credenciais, estratégia de promoção e
+  rollback do CD.

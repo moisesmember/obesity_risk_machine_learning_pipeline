@@ -18,6 +18,8 @@ O projeto usa como fonte de dados o
   publicação imutável, manifesto, idempotência e atualização da fonte.
 - [Notebook de exploração conectado ao MinIO](notebooks/01_data_exploration_minio.ipynb):
   inicializa o dataset, sincroniza o snapshot e inicia a análise exploratória.
+- [CI/CD e proteção da branch principal](docs/CI_CD.md): descreve o quality gate,
+  reprodução local, configuração recomendada para a `main` e o estado do deploy.
 
 ## Contexto do problema
 

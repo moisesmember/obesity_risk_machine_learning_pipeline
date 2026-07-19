@@ -1,0 +1,2 @@
+# Dependências mínimas para o quality gate. Integrações externas são simuladas nos testes.
+pytest>=8.0.0,<9.0.0
