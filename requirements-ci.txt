@@ -1,2 +1,6 @@
 # Dependências mínimas para o quality gate. Integrações externas são simuladas nos testes.
 pytest>=8.0.0,<9.0.0
+numpy>=1.26.0,<2.4.0
+pandas>=2.2.0,<2.4.0
+scikit-learn>=1.4.0,<1.8.0
+joblib>=1.3.0

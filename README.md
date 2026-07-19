@@ -20,6 +20,8 @@ O projeto usa como fonte de dados o
   inicializa o dataset, sincroniza o snapshot e inicia a análise exploratória.
 - [CI/CD e proteção da branch principal](docs/CI_CD.md): descreve o quality gate,
   reprodução local, configuração recomendada para a `main` e o estado do deploy.
+- [Modelagem inicial governada](docs/MODELING.md): documenta normalização, split,
+  preprocessamento, baselines, métricas e artefatos locais.
 
 ## Contexto do problema
 
@@ -307,6 +309,24 @@ Ao finalizar:
 docker compose down
 deactivate
 ```
+
+## Treinamento dos baselines
+
+Depois de inicializar o snapshot, execute a primeira fatia governada de modelagem:
+
+```bash
+obesity-train-baselines
+```
+
+O comando valida novamente o snapshot e o manifesto, cria um split estratificado
+provisório de 60% treino, 20% validação e 20% teste, ajusta transformações somente no
+treino e compara cinco baselines. A escolha usa macro F1 de validação; somente o
+vencedor é avaliado no teste intocado.
+
+Os artefatos são publicados atomicamente em `artifacts/runs/<run_id>/` e não são
+versionados. Consulte o [contrato de modelagem](docs/MODELING.md) antes de interpretar
+as métricas; o resultado é experimental e não possui autorização clínica ou de
+promoção.
 
 ## Boas práticas para o projeto
 

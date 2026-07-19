@@ -56,8 +56,8 @@
 - Estratégia provisória: holdout estratificado, pois não há tempo ou grupo disponível.
 - Justificativa: estima apenas generalização para registros intercambiáveis do mesmo
   processo de geração; não demonstra generalização temporal, geográfica ou clínica.
-- Proporções, cross-validation, política de amostragem e seed: decisões em aberto para
-  a fatia de modelagem.
+- Proporções provisórias: 60% treino, 20% validação e 20% teste, com seed `42`;
+  cross-validation e política de amostragem ainda dependem de aprovação.
 - Out-of-time/backtesting: não aplicável sem uma fonte temporal.
 - Invariante: separar teste antes de qualquer fit, seleção, imputação ou amostragem.
 
@@ -65,7 +65,8 @@
 
 - Baselines obrigatórios: regra derivada de IMC; dummy estratificado; modelo linear
   multiclasse; árvore simples; challenger sem peso/IMC.
-- Famílias permitidas: ainda não governadas; Scikit-learn é dependência principal.
+- Famílias permitidas nesta fatia: regra de IMC, dummy estratificado, regressão
+  logística e árvore de decisão simples, implementadas com Scikit-learn.
 - Métrica principal provisória: macro F1, sujeita à confirmação do custo de negócio.
 - Confirmação: balanced accuracy, recall por classe, matriz de confusão, log loss,
   calibração e métricas por gênero quando houver amostra suficiente.
@@ -110,6 +111,9 @@
 - Gates, baseline de produção, registry, rollback, retenção e responsável por aprovação
   humana: em aberto.
 - Não há promoção automática autorizada.
+- Cada treino de baseline publica atomicamente `model.joblib`, `evaluation.json` e
+  `manifest.json`; o manifesto registra hashes, configuração, partições e ausência
+  explícita de tracking/promoção enquanto a política de MLflow estiver pendente.
 - O GitHub Actions executa o check `quality-gate` em pull requests e pushes para
   `main`; a proteção da branch deve exigir esse check antes do merge.
 - O destino e a estratégia de deploy permanecem em aberto; o workflow atual não
@@ -164,10 +168,13 @@ docker compose up --build -d
 # exploração conectada ao MinIO
 docker compose up -d minio
 python -m jupyter lab notebooks/01_data_exploration_minio.ipynb
+
+# treino governado dos baselines no snapshot canônico
+obesity-train-baselines
 ```
 
-Treino, inferência, lint, type-check, migrations e gates de promoção ainda não possuem
-implementação verificável.
+Inferência servida, integração com MLflow, lint, type-check, migrations e gates de
+promoção ainda não possuem implementação verificável.
 
 ## Critérios de aceite iniciais
 
@@ -187,7 +194,7 @@ implementação verificável.
 - Uso de classificação atual ou risco futuro.
 - População-alvo e fonte externa de validação.
 - Disponibilidade de altura e peso na decisão real.
-- Split, proporções, seed e cross-validation da etapa de modelagem.
+- Aprovação das proporções e seed provisórias, além da estratégia de cross-validation.
 - Métricas e gates numéricos de promoção.
 - Política de disponibilidade do MLflow.
 - Contrato de inferência, SLA, monitoramento e aprovação humana.
