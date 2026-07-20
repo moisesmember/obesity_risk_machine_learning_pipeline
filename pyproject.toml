@@ -16,6 +16,8 @@ obesity-train-baselines = "obesity_risk_pipeline.pipelines.training_cli:baseline
 obesity-run-experiments = "obesity_risk_pipeline.pipelines.training_cli:main"
 obesity-training-pipeline = "obesity_risk_pipeline.pipelines.automation_cli:main"
 obesity-predict = "obesity_risk_pipeline.inference.cli:main"
+obesity-promote = "obesity_risk_pipeline.pipelines.promotion_cli:main"
+obesity-serve = "obesity_risk_pipeline.api.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

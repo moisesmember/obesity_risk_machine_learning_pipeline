@@ -1,0 +1,20 @@
+{
+  "policy_version": "experimental-v1",
+  "model_name": "obesity-risk-multiclass",
+  "thresholds": {
+    "min_holdout_macro_f1": 0.82,
+    "min_holdout_balanced_accuracy": 0.82,
+    "min_recall_per_class": 0.68,
+    "max_holdout_ordinal_mae": 0.20,
+    "max_cv_macro_f1_std": 0.02,
+    "max_gender_macro_f1_gap": 0.05
+  },
+  "require_human_approval": true,
+  "require_mlflow_logged": true,
+  "require_no_failed_candidates": true,
+  "require_no_unavailable_candidates": false,
+  "allowed_aliases": [
+    "candidate",
+    "champion"
+  ]
+}

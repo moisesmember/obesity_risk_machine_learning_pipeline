@@ -52,5 +52,8 @@ jobs:
       - name: Validar configuração do Docker Compose
         run: docker compose config --quiet
 
+      - name: Construir imagem de inferência
+        run: docker build --file docker/api/Dockerfile --tag obesity-risk/inference-api:ci .
+
       - name: Executar testes unitários
         run: python -m pytest -q tests/unit

@@ -20,7 +20,8 @@ O gate usa Python 3.10, a menor versão suportada pelo pacote, e executa:
 2. verificação de consistência das dependências instaladas;
 3. compilação estática dos módulos em `src/` e `tests/`;
 4. validação declarativa do `docker-compose.yml`, sem iniciar containers;
-5. testes unitários em `tests/unit`.
+5. construção da imagem Docker da API de inferência;
+6. testes unitários em `tests/unit`.
 
 Os testes unitários não acessam Kaggle, MinIO ou internet. Os adaptadores externos são
 simulados e o notebook é verificado estaticamente para garantir JSON válido, código
@@ -37,6 +38,7 @@ python -m pip install --no-deps --editable .
 python -m pip check
 python -m compileall -q src tests
 docker compose config --quiet
+docker build --file docker/api/Dockerfile --tag obesity-risk/inference-api:ci .
 python -m pytest -q tests/unit
 ```
 
@@ -57,9 +59,11 @@ proteção (ou ruleset) para `main` com estas condições:
 
 ## Estado do CD
 
-Este repositório ainda não define ambiente de destino, artefato implantável, estratégia
-de promoção, credenciais ou rollback. Por segurança, o workflow encerra na validação e
-não executa um deploy fictício. Quando esses contratos forem decididos, a entrega deve
-ser adicionada em um job separado, dependente de `quality-gate`, usando um GitHub
+O artefato implantável é a imagem definida em `docker/api/Dockerfile`; o fluxo de
+promoção e rollback rastreável está documentado em [`PRODUCTION.md`](PRODUCTION.md).
+O repositório ainda não define ambiente de destino, registry de imagens, credenciais,
+TLS ou estratégia de rollout. Por segurança, o workflow constrói e testa a imagem, mas
+não a publica nem executa um deploy fictício. Quando esses contratos forem decididos,
+a entrega deve entrar em job separado, dependente de `quality-gate`, usando GitHub
 Environment protegido, credenciais de curta duração e aprovação compatível com a
-política de governança do modelo.
+governança do modelo.

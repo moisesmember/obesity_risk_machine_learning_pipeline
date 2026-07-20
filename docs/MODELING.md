@@ -197,6 +197,23 @@ obesity-predict \
   --output data/predictions/predictions.csv
 ```
 
+O `--input` também aceita objetos do MinIO com URI `s3://`. Para pontuar o snapshot
+rotulado apenas como demonstração, a remoção do target deve ser solicitada
+explicitamente para impedir que o label chegue ao modelo:
+
+```bash
+obesity-predict \
+  --run-directory artifacts/runs/<run_id> \
+  --input s3://obesity-risk-datasets/datasets/obesity_risk_dataset/<sha256>/obesity_level.csv \
+  --drop-target \
+  --output data/predictions/predictions_minio.csv
+```
+
+Em objetos versionados por um componente SHA-256, a integridade é verificada
+automaticamente. Para outros prefixes, `--input-sha256 <hash>` habilita a mesma
+verificação. O bucket da URI deve coincidir com `MINIO_DATASET_BUCKET`; endpoint e
+credenciais continuam vindo do ambiente, nunca da URI.
+
 ## 13. Estrutura modular
 
 ```text
@@ -265,3 +282,10 @@ demonstração de MLOps, nunca diagnóstico clínico.
 - [StratifiedKFold — scikit-learn](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html)
 - [CatBoostClassifier e categorias nativas](https://catboost.ai/docs/en/concepts/python-reference_catboostclassifier)
 - [MLflow Python API](https://mlflow.org/docs/latest/api_reference/python_api/index.html)
+
+## Promoção e serving
+
+O treinamento sempre termina com `promotion_status=not_requested`: avaliação no
+holdout não autoriza produção. Gates numéricos, integridade dos artefatos, aprovação
+humana, MLflow Model Registry e a API são etapas separadas e estão descritas em
+[`PRODUCTION.md`](PRODUCTION.md).
