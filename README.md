@@ -22,6 +22,8 @@ O projeto usa como fonte de dados o
   reprodução local, configuração recomendada para a `main` e o estado do deploy.
 - [Modelagem inicial governada](docs/MODELING.md): documenta normalização, split,
   preprocessamento, baselines, métricas e artefatos locais.
+- [Promoção, Registry e API de inferência](docs/PRODUCTION.md): descreve os gates,
+  aprovação humana, registro no MLflow, rollback rastreável e serving fail-closed.
 
 ## Contexto do problema
 
@@ -376,6 +378,46 @@ completa é persistida em `artifacts/runs/<run_id>/training_events.jsonl`. Com
 parâmetros finais e artefatos; runs filhos recebem parâmetros e métricas de validação
 por candidato e por fold. `predictions.csv` fica apenas no armazenamento local por
 conter resultados associados a identificadores.
+
+A inferência batch aceita um CSV local ou uma URI MinIO no mesmo `--input`. Exemplo
+usando o snapshot governado e removendo explicitamente o target antes da predição:
+
+```powershell
+obesity-predict `
+  --run-directory artifacts/runs/<run_id> `
+  --input s3://obesity-risk-datasets/datasets/obesity_risk_dataset/<sha256>/obesity_level.csv `
+  --drop-target `
+  --output data/predictions/predictions_minio.csv
+```
+
+### Promoção e API experimental
+
+Um run não é promovido automaticamente pelo treinamento. A política experimental v1
+está em `configs/promotion.json`; revise seus limites e registre o modelo somente com
+aprovação humana explícita:
+
+```powershell
+obesity-promote `
+  --run-directory artifacts/runs/<run_id> `
+  --policy configs/promotion.json `
+  --approved-by "responsavel@empresa.com" `
+  --approval-ticket "CHANGE-1234" `
+  --register `
+  --alias candidate
+```
+
+O contrato da política está em `configs/promotion.schema.json`. A API exige, por
+padrão, um run e um relatório de promoção aprovado que correspondam entre si:
+
+```powershell
+$env:OBESITY_SERVING_RUN_DIRECTORY = (Resolve-Path "artifacts/runs/<run_id>")
+$env:OBESITY_SERVING_PROMOTION_DIRECTORY = (Resolve-Path "artifacts/promotions/<run_id>/<decision_id>")
+docker compose --profile serving up --build -d inference-api
+Invoke-RestMethod http://localhost:8000/health/ready
+```
+
+Consulte [o guia de produção experimental](docs/PRODUCTION.md) antes de promover ou
+servir um artefato.
 
 ## Boas práticas para o projeto
 

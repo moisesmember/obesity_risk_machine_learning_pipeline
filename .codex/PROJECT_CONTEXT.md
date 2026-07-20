@@ -78,15 +78,19 @@
 
 ## MLflow e rastreamento de experimentos
 
-- MLflow possui adaptador opcional; a política de torná-lo obrigatório continua em
-  aberto. Quando desabilitado ou indisponível, o resultado local permanece completo.
+- MLflow permanece opcional para experimentos que não serão promovidos; quando
+  desabilitado ou indisponível, o resultado local permanece completo. A política de
+  promoção `experimental-v1` exige que o run candidato esteja registrado no MLflow.
 - Tracking local previsto: `http://localhost:5000`.
 - Backend previsto: PostgreSQL; artefatos previstos: MinIO compatível com S3.
 - Convenção: um run pai por execução completa; runs filhos somente para trials ou
   challengers quando necessário.
 - Tags mínimas: versão/hash do dataset, versão do código e feature set.
 - Não registrar dados raw, segredos ou exemplos sensíveis.
-- Model Registry, autologging, retenção, aliases e responsável por promoção: em aberto.
+- O Model Registry possui adaptador governado: somente uma decisão aprovada, com
+  identidade do aprovador e ticket, pode registrar uma versão e atribuir um alias.
+- Os aliases default são `candidate` e `champion`; a política versionada pode
+  restringi-los. Autologging e retenção permanecem em aberto.
 
 ## Optuna e busca de hiperparâmetros
 
@@ -114,8 +118,20 @@
   `datasets/obesity_risk_dataset/<sha256>/`, com CSV e manifesto imutáveis.
 - Artefatos do MLflow no MinIO: bucket `obesity-risk-mlflow`, prefixo `artifacts/`;
   ambos os buckets são criados de forma idempotente pelo bootstrap do Compose.
-- Gates, baseline de produção, registry, rollback, retenção e responsável por aprovação
-  humana: em aberto.
+- A política `experimental-v1` está versionada em `configs/promotion.json`. Ela exige
+  no holdout macro F1 e balanced accuracy >= `0.82`, recall de cada classe >= `0.68`
+  e erro ordinal <= `0.20`; exige também desvio do macro F1 entre folds <= `0.02` e
+  diferença de macro F1 entre gêneros <= `0.05`.
+- Esses limites são gates para uso experimental no snapshot conhecido, derivados com
+  margem sobre quatro runs reproduzíveis. Não são critérios clínicos nem baseline de
+  produção externa e precisam ser revistos quando dataset, feature set, população ou
+  uso de negócio mudar.
+- A política exige tracking MLflow, nenhum candidato com falha e aprovação humana com
+  ticket. Backends opcionais indisponíveis são tolerados, mas o candidato selecionado
+  precisa estar íntegro e carregável.
+- Promoção e rollback são operações separadas do treino. Ambas exigem gates aprovados,
+  aprovador e ticket e produzem relatórios locais imutáveis; rollback aponta uma nova
+  decisão `champion` para um run histórico aprovado, sem sobrescrever histórico.
 - Não há promoção automática autorizada.
 - Cada execução publica atomicamente modelo, avaliação, leaderboard, previsões,
   explicabilidade, perfil de distribuição, estudo Optuna, ambiente, eventos JSONL de
@@ -125,17 +141,21 @@
   conter identificadores e resultados por registro.
 - O GitHub Actions executa o check `quality-gate` em pull requests e pushes para
   `main`; a proteção da branch deve exigir esse check antes do merge.
-- O destino e a estratégia de deploy permanecem em aberto; o workflow atual não
-  publica nem promove artefatos.
+- A imagem da API é construída pelo quality gate. Destino, registry de imagens,
+  credenciais e rollout permanecem em aberto; o workflow não publica nem promove
+  artefatos.
 
 ## Inferência e operação
 
-- Modo implementado: batch CSV via `obesity-predict`; API, frequência, SLA e feedback
-  permanecem em aberto.
-- Entradas com schema inválido ou artefato incompatível deverão ser rejeitadas com erro
-  acionável.
-- Monitoramento futuro: schema, drift, classes previstas, confiança, versão e métricas
-  por grupo quando labels estiverem disponíveis.
+- Modos implementados: batch CSV local ou MinIO por URI `s3://` via
+  `obesity-predict`, e API FastAPI via `obesity-serve` ou profile `serving` do Compose.
+- A API inicia de forma fail-closed e só fica ready com run e relatório de promoção
+  íntegros, aprovados e compatíveis. Schema inválido, target/campos extras e valores
+  fora dos limites governados são rejeitados. Categorias novas são toleradas pelo
+  preprocessador e aparecem no cálculo de drift, conforme o contrato executável atual.
+- Telemetria implementada: run do modelo, volume, classes previstas, confiança média,
+  alertas de drift e duração, sem registrar perfis individuais. Frequência, SLA,
+  autenticação, retenção, alertas e feedback com labels permanecem em aberto.
 
 ## Stack e estrutura
 
@@ -194,10 +214,20 @@ obesity-run-experiments --config configs/experiments.json
 
 # inferência batch com um run governado
 obesity-predict --run-directory artifacts/runs/<run_id> --input <input.csv> --output <output.csv>
+
+# avaliar gates; aprovação e --register são fornecidos somente após revisão humana
+obesity-promote --run-directory artifacts/runs/<run_id> --policy configs/promotion.json
+
+# API local (exige OBESITY_MODEL_RUN_DIRECTORY e OBESITY_PROMOTION_REPORT)
+obesity-serve
+
+# imagem/API pelo Docker Compose
+docker compose --profile serving up --build -d inference-api
 ```
 
-API de inferência, lint, type-check, migrations e gates de promoção ainda não possuem
-implementação verificável. MLflow está integrado como backend opcional.
+API de inferência e gates de promoção possuem testes verificáveis. Lint, type-check e
+migrations ainda não estão configurados. MLflow é opcional no treino, mas pode ser
+obrigatório pela política de promoção.
 
 ## Critérios de aceite iniciais
 
@@ -217,8 +247,9 @@ implementação verificável. MLflow está integrado como backend opcional.
 - Uso de classificação atual ou risco futuro.
 - População-alvo e fonte externa de validação.
 - Disponibilidade de altura e peso na decisão real.
-- Métricas e gates numéricos de promoção.
-- Política de disponibilidade do MLflow.
-- Contrato de inferência, SLA, monitoramento e aprovação humana.
-- Destino de deploy, artefato implantável, credenciais, estratégia de promoção e
-  rollback do CD.
+- Baseline externo e critérios clínicos/operacionais para substituir a política
+  experimental quando houver um uso real definido.
+- Política de disponibilidade e retenção do MLflow.
+- Identidade dos aprovadores e sistema oficial de tickets.
+- Autenticação/autorização da API, SLA, retenção, alertas e feedback com labels.
+- Destino de deploy, registry da imagem, credenciais e estratégia de rollout do CD.

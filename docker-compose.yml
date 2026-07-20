@@ -108,6 +108,42 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  inference-api:
+    profiles: ["serving"]
+    image: obesity-risk/inference-api:local
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    environment:
+      OBESITY_MODEL_RUN_DIRECTORY: /models/current
+      OBESITY_PROMOTION_REPORT: /governance/promotion_report.json
+      OBESITY_REQUIRE_PROMOTION: ${OBESITY_REQUIRE_PROMOTION:-true}
+      OBESITY_API_MAX_BATCH_SIZE: ${OBESITY_API_MAX_BATCH_SIZE:-1000}
+      OBESITY_API_LOG_LEVEL: ${OBESITY_API_LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:${OBESITY_API_PORT:-8000}:8000"
+    volumes:
+      - ${OBESITY_SERVING_RUN_DIRECTORY:-./artifacts/runs/not-configured}:/models/current:ro
+      - ${OBESITY_SERVING_PROMOTION_DIRECTORY:-./artifacts/promotions/not-configured}:/governance:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:

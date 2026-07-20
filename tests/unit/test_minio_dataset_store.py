@@ -136,6 +136,25 @@ def test_store_detects_corrupted_downloaded_bytes(tmp_path: Path) -> None:
         store.read_verified_dataset(snapshot.dataset_object, sha256)
 
 
+def test_store_reads_non_versioned_inference_object_without_forcing_a_hash() -> None:
+    client = FakeMinioClient()
+    client.buckets.add("obesity-risk-datasets")
+    client.objects[("obesity-risk-datasets", "inference/batch.csv")] = {
+        "payload": b"id,Age\n1,25\n",
+        "metadata": {},
+    }
+    store = MinioDatasetStore(_settings(), client=client)
+
+    assert store.read_object("inference/batch.csv") == b"id,Age\n1,25\n"
+
+
+def test_store_rejects_unsafe_object_name() -> None:
+    store = MinioDatasetStore(_settings(), client=FakeMinioClient())
+
+    with pytest.raises(ObjectStorageError, match="safe non-empty path"):
+        store.read_object("../inference.csv")
+
+
 def test_store_requires_existing_bucket_when_auto_creation_is_disabled(
     tmp_path: Path,
 ) -> None:

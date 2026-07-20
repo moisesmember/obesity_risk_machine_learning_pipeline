@@ -6,6 +6,11 @@ from obesity_risk_pipeline.config.settings import (
     load_ingestion_settings,
 )
 from obesity_risk_pipeline.config.minio import MinioSettings, load_minio_settings
+from obesity_risk_pipeline.config.promotion import (
+    PromotionPolicy,
+    PromotionThresholds,
+    load_promotion_policy,
+)
 from obesity_risk_pipeline.config.experiments import ExperimentPlan, load_experiment_plan
 from obesity_risk_pipeline.config.modeling import (
     ModelingSettings,
@@ -21,5 +26,8 @@ __all__ = [
     "load_ingestion_settings",
     "load_experiment_plan",
     "load_minio_settings",
+    "PromotionPolicy",
+    "PromotionThresholds",
+    "load_promotion_policy",
     "load_modeling_settings",
 ]

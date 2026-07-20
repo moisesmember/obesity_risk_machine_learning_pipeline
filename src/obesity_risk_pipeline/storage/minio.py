@@ -125,8 +125,26 @@ class MinioDatasetStore:
     ) -> bytes:
         """Read a dataset object and verify its content hash before returning bytes."""
 
+        return self.read_object(object_name, expected_sha256=expected_sha256)
+
+    def read_object(
+        self,
+        object_name: str,
+        *,
+        expected_sha256: str | None = None,
+    ) -> bytes:
+        """Read one object, optionally enforcing a caller-provided SHA-256."""
+
+        normalized_name = object_name.strip("/")
+        if not normalized_name or any(
+            part in {"", ".", ".."} for part in normalized_name.split("/")
+        ):
+            raise ObjectStorageError("MinIO object name must be a safe non-empty path")
+
         try:
-            response = self._client.get_object(self._settings.bucket, object_name)
+            response = self._client.get_object(
+                self._settings.bucket, normalized_name
+            )
             try:
                 payload = response.read()
             finally:
@@ -134,13 +152,15 @@ class MinioDatasetStore:
                 response.release_conn()
         except Exception as exc:
             raise ObjectStorageError(
-                f"unable to read governed MinIO object {object_name!r}"
+                f"unable to read governed MinIO object {normalized_name!r}"
             ) from exc
 
-        actual_sha256 = hashlib.sha256(payload).hexdigest()
-        if actual_sha256 != expected_sha256:
+        if (
+            expected_sha256 is not None
+            and hashlib.sha256(payload).hexdigest() != expected_sha256.lower()
+        ):
             raise ObjectStorageError(
-                f"MinIO object integrity check failed for {object_name!r}"
+                f"MinIO object integrity check failed for {normalized_name!r}"
             )
         return payload
 
