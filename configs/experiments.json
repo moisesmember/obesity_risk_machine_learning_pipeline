@@ -1,0 +1,24 @@
+{
+  "experiments": [
+    "A_full",
+    "A_full_ordinal",
+    "B_without_gender",
+    "C_without_weight",
+    "C_without_weight_height",
+    "D_behavioral",
+    "E_body_bmi",
+    "F_age_continuous",
+    "F_age_completed",
+    "F_age_grouped"
+  ],
+  "models": [
+    "dummy",
+    "logistic_regression",
+    "extra_trees",
+    "random_forest",
+    "hist_gradient_boosting",
+    "catboost",
+    "lightgbm",
+    "xgboost"
+  ]
+}

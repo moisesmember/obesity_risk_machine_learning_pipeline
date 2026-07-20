@@ -1,0 +1,16 @@
+.git
+.github
+.codex
+.agents
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.ruff_cache
+.env
+data
+docs
+notebooks
+src
+tests

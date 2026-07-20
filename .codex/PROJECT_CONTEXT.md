@@ -56,25 +56,30 @@
 - Estratégia provisória: holdout estratificado, pois não há tempo ou grupo disponível.
 - Justificativa: estima apenas generalização para registros intercambiáveis do mesmo
   processo de geração; não demonstra generalização temporal, geográfica ou clínica.
-- Proporções, cross-validation, política de amostragem e seed: decisões em aberto para
-  a fatia de modelagem.
+- Proporções governadas: 80% desenvolvimento e 20% holdout final, com seed `42`.
+- Comparação e seleção usam `StratifiedKFold` com cinco folds, shuffle e seed fixa
+  exclusivamente dentro do desenvolvimento.
 - Out-of-time/backtesting: não aplicável sem uma fonte temporal.
-- Invariante: separar teste antes de qualquer fit, seleção, imputação ou amostragem.
+- Invariante: separar holdout antes de qualquer fit, seleção, imputação, otimização ou
+  amostragem; o holdout recebe somente a configuração final.
 
 ## Modelagem e avaliação
 
-- Baselines obrigatórios: regra derivada de IMC; dummy estratificado; modelo linear
-  multiclasse; árvore simples; challenger sem peso/IMC.
-- Famílias permitidas: ainda não governadas; Scikit-learn é dependência principal.
-- Métrica principal provisória: macro F1, sujeita à confirmação do custo de negócio.
-- Confirmação: balanced accuracy, recall por classe, matriz de confusão, log loss,
-  calibração e métricas por gênero quando houver amostra suficiente.
+- Experimentos obrigatórios: completo, sem gênero, sem peso, sem peso/altura,
+  comportamental, corporal com BMI e três representações exclusivas de idade.
+- Famílias permitidas: Dummy, regressão logística, ExtraTrees, RandomForest,
+  HistGradientBoosting, CatBoost, LightGBM e XGBoost.
+- Métrica principal: macro F1 médio da validação cruzada.
+- Confirmação: desvio entre folds, balanced accuracy, weighted F1, precision/recall/F1
+  por classe, matriz de confusão, log loss, Brier, erro ordinal, Kappa quadrático e
+  métricas por gênero.
 - Threshold: em aberto; argmax é apenas comportamento técnico inicial.
 - Restrições de latência, tamanho e explicabilidade: em aberto.
 
 ## MLflow e rastreamento de experimentos
 
-- MLflow está previsto, mas a política de obrigatoriedade e falha está em aberto.
+- MLflow possui adaptador opcional; a política de torná-lo obrigatório continua em
+  aberto. Quando desabilitado ou indisponível, o resultado local permanece completo.
 - Tracking local previsto: `http://localhost:5000`.
 - Backend previsto: PostgreSQL; artefatos previstos: MinIO compatível com S3.
 - Convenção: um run pai por execução completa; runs filhos somente para trials ou
@@ -85,10 +90,12 @@
 
 ## Optuna e busca de hiperparâmetros
 
-- Optuna é dependência disponível, mas não faz parte da fatia de ingestão.
-- Objective, folds, sampler, pruner, seed, espaços, orçamentos, storage, retomada e
-  refit: decisões em aberto.
-- Caminho sem Optuna será obrigatório.
+- Optuna é opcional, desabilitado por padrão e executado somente após a comparação
+  inicial, sobre o candidato selecionado.
+- Objective: macro F1 médio nos mesmos folds de desenvolvimento; o estudo também
+  registra estabilidade, erro ordinal e tempo e nunca recebe o holdout.
+- O número de trials é limitado por `OBESITY_OPTUNA_TRIALS`; zero preserva o caminho
+  completo sem otimização.
 
 ## AutoML e challengers
 
@@ -103,11 +110,19 @@
 - Artefatos iniciais obrigatórios da ingestão: CSV raw imutável e `manifest.json` com
   proveniência, hash, tamanho, schema, contagens e timestamp UTC.
 - Object storage previsto: MinIO; banco de metadados previsto: PostgreSQL.
-- Snapshots de dados no MinIO: bucket `fraud-detection`, prefixo
+- Snapshots de dados no MinIO: bucket `obesity-risk-datasets`, prefixo
   `datasets/obesity_risk_dataset/<sha256>/`, com CSV e manifesto imutáveis.
+- Artefatos do MLflow no MinIO: bucket `obesity-risk-mlflow`, prefixo `artifacts/`;
+  ambos os buckets são criados de forma idempotente pelo bootstrap do Compose.
 - Gates, baseline de produção, registry, rollback, retenção e responsável por aprovação
   humana: em aberto.
 - Não há promoção automática autorizada.
+- Cada execução publica atomicamente modelo, avaliação, leaderboard, previsões,
+  explicabilidade, perfil de distribuição, estudo Optuna, ambiente, eventos JSONL de
+  treinamento e manifesto com hashes.
+- O MLflow recebe parâmetros, durações, métricas de holdout, runs filhos dos
+  candidatos/folds e artefatos governados. `predictions.csv` permanece local por
+  conter identificadores e resultados por registro.
 - O GitHub Actions executa o check `quality-gate` em pull requests e pushes para
   `main`; a proteção da branch deve exigir esse check antes do merge.
 - O destino e a estratégia de deploy permanecem em aberto; o workflow atual não
@@ -115,7 +130,8 @@
 
 ## Inferência e operação
 
-- Modo, contrato de entrada/saída, frequência, SLA e feedback: em aberto.
+- Modo implementado: batch CSV via `obesity-predict`; API, frequência, SLA e feedback
+  permanecem em aberto.
 - Entradas com schema inválido ou artefato incompatível deverão ser rejeitadas com erro
   acionável.
 - Monitoramento futuro: schema, drift, classes previstas, confiança, versão e métricas
@@ -145,6 +161,12 @@ python -m pip install -e .
 # inicialização idempotente: valida o snapshot existente ou importa do Kaggle
 obesity-initialize
 
+# automação Windows: venv, dependências, ingestão e treino rápido
+.\scripts\run_training_pipeline.ps1
+
+# orquestração multiplataforma em ambiente já instalado
+obesity-training-pipeline --mode quick
+
 # testes
 python -m pytest
 
@@ -162,10 +184,20 @@ docker compose up --build -d
 # exploração conectada ao MinIO
 docker compose up -d minio
 python -m jupyter lab notebooks/01_data_exploration_minio.ipynb
+
+# treino governado dos baselines no snapshot canônico
+obesity-train-baselines
+
+# catálogo completo de ablações e modelos
+python -m pip install -r requirements-modeling.txt
+obesity-run-experiments --config configs/experiments.json
+
+# inferência batch com um run governado
+obesity-predict --run-directory artifacts/runs/<run_id> --input <input.csv> --output <output.csv>
 ```
 
-Treino, inferência, lint, type-check, migrations e gates de promoção ainda não possuem
-implementação verificável.
+API de inferência, lint, type-check, migrations e gates de promoção ainda não possuem
+implementação verificável. MLflow está integrado como backend opcional.
 
 ## Critérios de aceite iniciais
 
@@ -185,7 +217,6 @@ implementação verificável.
 - Uso de classificação atual ou risco futuro.
 - População-alvo e fonte externa de validação.
 - Disponibilidade de altura e peso na decisão real.
-- Split, proporções, seed e cross-validation da etapa de modelagem.
 - Métricas e gates numéricos de promoção.
 - Política de disponibilidade do MLflow.
 - Contrato de inferência, SLA, monitoramento e aprovação humana.

@@ -18,7 +18,7 @@ class MinioSettings:
     endpoint: str
     access_key: str = field(repr=False)
     secret_key: str = field(repr=False)
-    bucket: str = "fraud-detection"
+    bucket: str = "obesity-risk-datasets"
     prefix: str = "datasets/obesity_risk_dataset"
     secure: bool = False
     auto_create_bucket: bool = True
@@ -74,7 +74,7 @@ def load_minio_settings() -> MinioSettings:
         endpoint=os.getenv("MINIO_ENDPOINT") or "localhost:9000",
         access_key=access_key,
         secret_key=secret_key,
-        bucket=os.getenv("MINIO_DATASET_BUCKET") or "fraud-detection",
+        bucket=os.getenv("MINIO_DATASET_BUCKET") or "obesity-risk-datasets",
         prefix=(
             os.getenv("MINIO_DATASET_PREFIX") or "datasets/obesity_risk_dataset"
         ),

@@ -95,7 +95,7 @@ O notebook
 reutiliza o snapshot governado e o publica no MinIO sob:
 
 ```text
-s3://fraud-detection/datasets/obesity_risk_dataset/<sha256>/
+s3://obesity-risk-datasets/datasets/obesity_risk_dataset/<sha256>/
 ├── obesity_level.csv
 └── manifest.json
 ```

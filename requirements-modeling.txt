@@ -1,0 +1,9 @@
+-r requirements-training.txt
+
+# Backends progressivos e explicabilidade usados pelo catálogo completo.
+mlflow>=2.22.0,<4.0
+optuna>=4.0.0,<5.0
+catboost>=1.2.8,<2.0
+lightgbm>=4.5.0,<5.0
+xgboost>=2.1.0,<4.0
+shap>=0.46.0,<1.0

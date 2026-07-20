@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from obesity_risk_pipeline.config.minio import MinioSettings
+from obesity_risk_pipeline.config.minio import MinioSettings, load_minio_settings
 from obesity_risk_pipeline.storage.minio import MinioDatasetStore, ObjectStorageError
 
 
@@ -73,7 +73,7 @@ def _settings() -> MinioSettings:
         endpoint="localhost:9000",
         access_key="local-access",
         secret_key="local-secret",
-        bucket="fraud-detection",
+        bucket="obesity-risk-datasets",
         prefix="datasets/obesity_risk_dataset",
         secure=False,
         auto_create_bucket=True,
@@ -102,7 +102,7 @@ def test_store_uploads_missing_snapshot_and_reuses_matching_objects(
     assert first.reused_existing_objects is False
     assert second.reused_existing_objects is True
     assert client.upload_count == 2
-    assert first.bucket == "fraud-detection"
+    assert first.bucket == "obesity-risk-datasets"
     assert first.dataset_object.endswith(f"/{sha256}/obesity_level.csv")
     assert store.read_verified_dataset(first.dataset_object, sha256) == (
         dataset_path.read_bytes()
@@ -144,7 +144,7 @@ def test_store_requires_existing_bucket_when_auto_creation_is_disabled(
         endpoint="localhost:9000",
         access_key="local-access",
         secret_key="local-secret",
-        bucket="fraud-detection",
+        bucket="obesity-risk-datasets",
         prefix="datasets/obesity_risk_dataset",
         auto_create_bucket=False,
     )
@@ -153,3 +153,26 @@ def test_store_requires_existing_bucket_when_auto_creation_is_disabled(
         MinioDatasetStore(settings, client=FakeMinioClient()).ensure_snapshot(
             dataset_path, manifest_path, sha256
         )
+
+
+def test_default_settings_match_the_local_compose_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for variable_name in (
+        "MINIO_ENDPOINT",
+        "MINIO_ACCESS_KEY",
+        "MINIO_ROOT_USER",
+        "MINIO_SECRET_KEY",
+        "MINIO_ROOT_PASSWORD",
+        "MINIO_DATASET_BUCKET",
+        "MINIO_DATASET_PREFIX",
+        "MINIO_SECURE",
+        "MINIO_AUTO_CREATE_BUCKET",
+    ):
+        monkeypatch.delenv(variable_name, raising=False)
+
+    settings = load_minio_settings()
+
+    assert settings.endpoint == "localhost:9000"
+    assert settings.bucket == "obesity-risk-datasets"
+    assert settings.prefix == "datasets/obesity_risk_dataset"

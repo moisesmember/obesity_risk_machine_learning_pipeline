@@ -20,6 +20,8 @@ O projeto usa como fonte de dados o
   inicializa o dataset, sincroniza o snapshot e inicia a análise exploratória.
 - [CI/CD e proteção da branch principal](docs/CI_CD.md): descreve o quality gate,
   reprodução local, configuração recomendada para a `main` e o estado do deploy.
+- [Modelagem inicial governada](docs/MODELING.md): documenta normalização, split,
+  preprocessamento, baselines, métricas e artefatos locais.
 
 ## Contexto do problema
 
@@ -212,12 +214,14 @@ auditada e o contrato seja atualizado intencionalmente. Consulte o
 
 ## Infraestrutura local com Docker Compose
 
-O arquivo `docker-compose.yml` define três serviços:
+O arquivo `docker-compose.yml` define três serviços persistentes e um bootstrap
+idempotente:
 
 | Serviço | Finalidade | Acesso local |
 | --- | --- | --- |
 | PostgreSQL | Backend de metadados do MLflow | `localhost:5432` |
-| MinIO | Armazenamento dos artefatos | API em `http://localhost:9000` e console em `http://localhost:9001` |
+| MinIO | Object storage dos datasets e artefatos | API em `http://localhost:9000` e console em `http://localhost:9001` |
+| MinIO Init | Criação idempotente dos buckets `obesity-risk-datasets` e `obesity-risk-mlflow` | Job interno, sem porta publicada |
 | MLflow | Rastreamento dos experimentos | `http://localhost:5000` |
 
 Com o Docker em execução, suba os serviços em segundo plano:
@@ -239,14 +243,26 @@ Para interromper os serviços sem apagar os volumes persistentes:
 docker compose down
 ```
 
-As credenciais padrão presentes no Compose servem somente para desenvolvimento local.
-Em ambientes compartilhados, configure valores seguros por variáveis de ambiente e
-nunca versione segredos.
+O Compose aguarda PostgreSQL e MinIO ficarem saudáveis, cria os buckets quando ainda não
+existem e só então inicia o MLflow. A imagem local do tracking server é construída por
+[`docker/mlflow/Dockerfile`](docker/mlflow/Dockerfile) com dependências próprias e
+versões diretas fixadas, sem instalar o stack completo de notebooks e treinamento.
 
-> **Estado atual:** o Compose referencia `docker/mlflow/Dockerfile`, mas esse arquivo
-> ainda não existe no repositório. O build do serviço MLflow somente funcionará depois
-> que essa imagem for adicionada. O destino S3 configurado também pressupõe a existência
-> prévia do bucket usado pelo MLflow no MinIO.
+As portas são vinculadas somente a `127.0.0.1`. As credenciais padrão servem apenas
+para desenvolvimento local; copie `.env.example` para `.env` quando precisar alterar
+portas ou credenciais e nunca versione segredos. Se a senha do PostgreSQL contiver
+caracteres reservados de URL, também será necessário adaptar a construção da URI do
+backend do MLflow; mantenha o default apenas no ambiente local.
+
+O MinIO mantém datasets governados em
+`s3://obesity-risk-datasets/datasets/obesity_risk_dataset/` e o MLflow grava artefatos
+via proxy em `s3://obesity-risk-mlflow/artifacts/`. Os volumes persistem após
+`docker compose down`; não use a opção `--volumes` sem intenção explícita de apagar o
+estado local.
+
+Volumes antigos que ainda usem o bucket legado `fraud-detection` não são migrados nem
+apagados automaticamente. Execute novamente o notebook para publicar o snapshot
+governado nos novos buckets ou configure temporariamente o nome legado no `.env`.
 
 ## Execução dos notebooks
 
@@ -293,6 +309,73 @@ Ao finalizar:
 docker compose down
 deactivate
 ```
+
+## Modelagem e experimentação
+
+### Pipeline automatizada
+
+No PowerShell, execute todo o fluxo rápido com um comando:
+
+```powershell
+.\scripts\run_training_pipeline.ps1
+```
+
+O script cria ou reutiliza `.venv`, instala o conjunto mínimo de dependências, instala
+o pacote local, valida/importa o dataset e executa o treinamento. Não é necessário
+ativar manualmente o ambiente virtual.
+
+Para o catálogo completo, testes, MLflow local e Optuna:
+
+```powershell
+.\scripts\run_training_pipeline.ps1 `
+  -Mode full `
+  -RunTests `
+  -StartInfrastructure `
+  -EnableMlflow `
+  -OptunaTrials 20
+```
+
+Use `-SkipInstall` para reutilizar dependências já instaladas. Se a política do
+PowerShell bloquear scripts, habilite apenas o processo atual com
+`Set-ExecutionPolicy -Scope Process Bypass`.
+
+Com um ambiente já preparado, o orquestrador Python equivalente funciona em qualquer
+sistema operacional:
+
+```bash
+obesity-training-pipeline --mode quick
+obesity-training-pipeline --mode full --config configs/experiments.json
+```
+
+Depois de inicializar o snapshot, execute o smoke test governado:
+
+```bash
+obesity-train-baselines
+```
+
+Para executar as ablações A–F e todo o catálogo de modelos, instale os backends e rode:
+
+```bash
+python -m pip install -r requirements-modeling.txt
+obesity-run-experiments --config configs/experiments.json
+```
+
+A pipeline reserva 20% como holdout final e utiliza cinco folds estratificados nos 80%
+de desenvolvimento. Transformações, seleção de features e otimização são ajustadas
+somente nos folds. O vencedor é escolhido pelo macro F1 médio, com estabilidade e erro
+ordinal como desempate, e somente então é avaliado no holdout.
+
+Os artefatos, leaderboard e previsões rastreáveis são publicados atomicamente em
+`artifacts/runs/<run_id>/` e não são versionados. Consulte o
+[contrato de modelagem](docs/MODELING.md); o resultado é experimental e não possui
+autorização clínica ou de promoção.
+
+Durante a execução, cada etapa e fold gera logs estruturados no console. A trilha
+completa é persistida em `artifacts/runs/<run_id>/training_events.jsonl`. Com
+`-EnableMlflow` ou `--enable-mlflow`, o run pai recebe durações, métricas do holdout,
+parâmetros finais e artefatos; runs filhos recebem parâmetros e métricas de validação
+por candidato e por fold. `predictions.csv` fica apenas no armazenamento local por
+conter resultados associados a identificadores.
 
 ## Boas práticas para o projeto
 

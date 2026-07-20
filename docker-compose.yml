@@ -1,19 +1,21 @@
+name: obesity-risk-ml
+
 services:
   postgres:
-    image: postgres:17.5-alpine
+    image: postgres:17.10-alpine3.23
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mlflow}
       POSTGRES_USER: ${POSTGRES_USER:-mlflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-mlflow} -d ${POSTGRES_DB:-mlflow}",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
         ]
       interval: 10s
       timeout: 5s
@@ -22,18 +24,45 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_DATASET_BUCKET: ${MINIO_DATASET_BUCKET:-obesity-risk-datasets}
+      MINIO_MLFLOW_BUCKET: ${MINIO_MLFLOW_BUCKET:-obesity-risk-mlflow}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing "local/$${MINIO_DATASET_BUCKET}"
+        mc mb --ignore-existing "local/$${MINIO_MLFLOW_BUCKET}"
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
 
   mlflow:
+    image: obesity-risk/mlflow:3.14.0-local
     build:
       context: .
       dockerfile: docker/mlflow/Dockerfile
@@ -49,19 +78,35 @@ services:
         "postgresql+psycopg://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow}@postgres:5432/${POSTGRES_DB:-mlflow}",
         "--serve-artifacts",
         "--artifacts-destination",
-        "${MLFLOW_ARTIFACT_ROOT:-s3://fraud-detection/mlflow}",
+        "s3://${MINIO_MLFLOW_BUCKET:-obesity-risk-mlflow}/${MLFLOW_ARTIFACT_PREFIX:-artifacts}",
       ]
     environment:
       AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      MLFLOW_SERVER_ALLOWED_HOSTS: ${MLFLOW_SERVER_ALLOWED_HOSTS:-localhost:*,127.0.0.1:*,mlflow:5000}
+      MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: ${MLFLOW_SERVER_CORS_ALLOWED_ORIGINS:-http://localhost:*,http://127.0.0.1:*}
     ports:
-      - "5000:5000"
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
-        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   postgres_data:

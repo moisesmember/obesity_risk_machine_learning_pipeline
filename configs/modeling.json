@@ -1,0 +1,19 @@
+{
+  "holdout_size": 0.2,
+  "cv_folds": 5,
+  "random_state": 42,
+  "feature_set_version": "v2",
+  "target_proportion_tolerance": 0.03,
+  "distribution_psi_threshold": 0.25,
+  "optuna_trials": 0,
+  "numeric_bounds": {
+    "Age": {"minimum": 0.0, "maximum": 120.0},
+    "Height": {"minimum": 0.5, "maximum": 2.5},
+    "Weight": {"minimum": 10.0, "maximum": 500.0},
+    "FCVC": {"minimum": 1.0, "maximum": 3.0},
+    "NCP": {"minimum": 1.0, "maximum": 4.0},
+    "CH2O": {"minimum": 1.0, "maximum": 3.0},
+    "FAF": {"minimum": 0.0, "maximum": 3.0},
+    "TUE": {"minimum": 0.0, "maximum": 2.0}
+  }
+}
