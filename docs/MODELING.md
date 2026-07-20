@@ -1,113 +1,267 @@
-# Modelagem inicial governada
+# Pipeline de experimentação e modelagem
 
-## Objetivo
+## 1. Diagnóstico técnico
 
-Esta fatia implementa os baselines técnicos do projeto sem atribuir uso clínico ao
-resultado. O treinamento parte exclusivamente do snapshot raw validado e do manifesto
-correspondente. Nenhum arquivo raw é alterado.
+O projeto resolve uma classificação supervisionada multiclasse com sete estados
+corporais ordenados. O snapshot possui 20.758 linhas, baixa cardinalidade categórica,
+variáveis contínuas e leve diferença de frequência entre classes. Esse desbalanceamento
+não autoriza automaticamente reamostragem nem `class_weight="balanced"`.
 
-## Normalização canônica
+O dataset é transversal e parcialmente sintético. Portanto, mede a capacidade de
+reconhecer padrões no mesmo processo de geração; não demonstra risco futuro,
+causalidade, eficácia clínica ou generalização populacional.
 
-Antes do split, a camada de dados executa somente transformações determinísticas:
+## 2. Riscos e interpretação
 
-- renomeia o alvo raw `0be1dad` para `NObeyesdad`;
-- corrige `0rmal_Weight` para `Normal_Weight`;
-- normaliza campos binários `0`/`1` para `No`/`Yes`;
-- normaliza o valor categórico `0` de `CAEC` e `CALC` para `No`;
-- converte os campos numéricos conforme o contrato;
-- preserva `id` apenas para auditoria de isolamento das partições.
+- **Vazamento:** informação indisponível na decisão, target ou estatística calculada
+  com validação/holdout entra no treinamento. É defeito de correção.
+- **Proxy do alvo:** `Weight`, `Height` e `BMI` podem reconstruir aproximadamente a
+  regra que originou o estado corporal. Podem estar disponíveis e ainda assim dominar
+  o modelo, reduzindo a interpretação comportamental.
+- **Feature legítima:** uma medida comprovadamente disponível na inferência pode ser
+  usada, desde que o objetivo real aceite essa dependência e ela seja monitorada.
 
-Schema, domínios, duplicidades, classes, hash e manifesto são novamente validados antes
-da modelagem. Uma divergência interrompe o run.
+`Gender` também pode atuar como atalho devido às associações observadas no snapshot.
+As métricas por gênero e a ablação B avaliam essa dependência sem atribuir causalidade.
 
-## Split provisório
+## 3. Estratégia de validação
 
-Na ausência de tempo ou entidade persistente, o contrato inicial usa holdout aleatório
-estratificado:
+O split é criado antes de qualquer `fit`:
 
-| Partição | Proporção | Uso permitido |
+| Partição | Proporção | Uso |
 | --- | ---: | --- |
-| Treino | 60% | `fit` de preprocessamento e estimadores |
-| Validação | 20% | comparação e escolha do baseline |
-| Teste | 20% | avaliação única do vencedor |
+| Desenvolvimento | 80% | cinco folds estratificados para comparação, features e Optuna |
+| Holdout final | 20% | uma avaliação confirmatória da configuração vencedora |
 
-A seed provisória é `42`. Proporções e seed ficam centralizadas em configuração e
-podem ser sobrescritas por CLI ou ambiente. A pipeline comprova que identificadores não
-se cruzam, que todas as classes estão presentes e que categorias raras observadas têm
-cobertura nas três partições. Se a cobertura falhar, o run para com mensagem acionável.
+O desenvolvimento usa `StratifiedKFold(n_splits=5, shuffle=True,
+random_state=42)`. Cada fold recebe um clone completo da pipeline; imputação,
+padronização, encoding e feature engineering são ajustados apenas no treino do fold.
 
-Essas escolhas ainda precisam de aprovação de negócio/metodologia e não medem
-generalização temporal, geográfica ou clínica.
+## 4. Experimentos de features
 
-## Preprocessamento
+O catálogo está em `features/experiments.py`, enquanto a seleção executada fica em
+`configs/experiments.json`.
 
-O preprocessamento faz parte da pipeline serializada:
+| Experimento | Features/representação | Objetivo |
+| --- | --- | --- |
+| A_full | 16 preditoras, Age contínua | referência completa |
+| A_full_ordinal | A, com CAEC/CALC ordinais | nominal versus ordinal |
+| B_without_gender | A sem Gender | dependência do atalho de gênero |
+| C_without_weight | A sem Weight, mantendo Height | efeito isolado do peso |
+| C_without_weight_height | A sem Weight/Height | remoção dos proxies corporais |
+| D_behavioral | hábitos, atividade, água, tecnologia, transporte e histórico | estimativa comportamental |
+| E_body_bmi | Weight, Height e BMI | quanto a regra corporal explica |
+| F_age_continuous | A com Age float | representação principal |
+| F_age_completed | A com `floor(Age)` | entrada em anos completos |
+| F_age_grouped | A com faixas | entrada categórica interpretável |
 
-- mediana e padronização para features numéricas;
-- moda e one-hot encoding com domínios categóricos explícitos;
-- erro para categoria fora do contrato;
-- `fit` realizado exclusivamente com treino.
+`Age`, `Age_completed` e `Age_group` nunca coexistem no mesmo experimento. BMI é
+calculado dentro da pipeline por `Weight / Height²`; `id` e `NObeyesdad` nunca entram
+nas features.
 
-São mantidos dois conjuntos de features:
+## 5. Validação dos dados
 
-- `full`: todas as 16 features, sem `id` e sem o alvo;
-- `without_anthropometrics`: remove `Height` e `Weight` para auditar circularidade.
+A camada de schema equivalente a frameworks dedicados valida:
 
-## Baselines
+- colunas obrigatórias e inesperadas;
+- tipos, nulos, infinitos e unicidade de `id`;
+- sete classes e tolerância configurável de proporção;
+- domínios categóricos;
+- limites numéricos centralizados em `configs/modeling.json`;
+- manifesto, tamanho e SHA-256 do snapshot;
+- perfil de distribuição e alertas PSI para lotes de inferência.
 
-O comando compara cinco candidatos fixos, sem busca de hiperparâmetros:
+O treino rejeita categorias fora do contrato. A inferência aceita categorias nominais
+novas para modelos configurados com `handle_unknown="ignore"`, mantendo o evento de
+drift observável.
 
-1. regra heurística derivada de IMC;
-2. dummy estratificado;
-3. regressão logística com features completas;
-4. árvore simples com features completas;
-5. regressão logística sem altura e peso.
+## 6. Preprocessamento
 
-A divisão do intervalo de sobrepeso em níveis I e II na regra de IMC usa o ponto
-técnico de `27,5 kg/m²` apenas para reproduzir as sete classes do dataset. Essa divisão
-é um baseline de auditoria, não uma recomendação clínica.
+- valores numéricos permanecem contínuos no experimento principal;
+- regressão logística recebe mediana e padronização;
+- árvores recebem mediana sem padronização obrigatória;
+- categorias nominais usam one-hot com categorias desconhecidas ignoradas;
+- CAEC/CALC possuem experimento ordinal explícito;
+- CatBoost recebe `DataFrame` e nomes categóricos diretamente, sem one-hot manual.
 
-O vencedor é escolhido pelo macro F1 de validação. O teste não participa de escolha,
-ajuste, threshold ou desempate. O desempate de validação é determinístico pelo nome do
-candidato.
+Nenhuma etapa usa target encoding ou balanceamento nesta versão.
 
-## Métricas e artefatos
+## 7. Modelos progressivos
 
-Cada candidato recebe na validação: macro F1, balanced accuracy, accuracy, log loss,
-Brier multiclasse, recall por classe, matriz de confusão e métricas por gênero. Somente
-o vencedor recebe o relatório de teste.
+O catálogo implementa DummyClassifier, LogisticRegression, ExtraTrees,
+RandomForest, HistGradientBoosting, CatBoost, LightGBM e XGBoost. Backends externos são
+carregados sob demanda. Ausência de pacote vira `unavailable`; falha de um backend
+instalado vira `failed`, sem invalidar candidatos independentes.
 
-Cada run é publicado atomicamente em `artifacts/runs/<run_id>/`:
+Instale o catálogo completo com:
+
+```bash
+python -m pip install -r requirements-modeling.txt
+```
+
+## 8. Métricas e seleção
+
+Cada fold registra macro F1, weighted F1, accuracy, balanced accuracy, log loss,
+Brier multiclasse, precision/recall/F1 por classe, matriz de confusão, erro absoluto
+ordinal, Quadratic Weighted Kappa e métricas por gênero. O relatório agrega média e
+desvio-padrão.
+
+O ranking usa: maior macro F1 médio, menor desvio do macro F1, menor erro ordinal,
+maior Kappa quadrático, menor tempo e nome determinístico. Accuracy nunca é o único
+critério.
+
+`leaderboard.csv` contém experimento, features, idade, modelo, macro F1 médio/desvio,
+accuracy, log loss, erro ordinal, tempo e observação sobre proxies.
+
+## 9. Optuna
+
+Optuna é desabilitado por padrão (`0` trials) e só recebe o candidato selecionado pela
+comparação inicial. A objective maximiza macro F1 médio nos mesmos folds de
+desenvolvimento e registra estabilidade, erro ordinal e tempo. O holdout nunca é
+passado ao estudo.
+
+```bash
+obesity-run-experiments --optuna-trials 20
+```
+
+## 10. MLflow
+
+Quando habilitado, um run pai registra identidade do dataset, configuração do split,
+quantidade de linhas por partição, hiperparâmetros finais do vencedor, duração das
+etapas, métricas do holdout e artefatos governados. Cada candidato recebe um run filho
+identificável por modelo, feature set e representação de idade, com parâmetros, médias,
+desvios, métricas por classe e histórico dos folds usando `step`. Quando a otimização
+está ativa, cada trial do Optuna também é um run filho com estado, parâmetros e
+métricas, além do resumo consolidado no run pai.
+
+Falha do tracking é registrada como `failed_optional` e não apaga o resultado local
+completo. O tracking é manual para preservar a hierarquia do experimento e impedir que
+autologging crie runs duplicados.
+
+```bash
+obesity-run-experiments --enable-mlflow
+```
+
+O MLflow recebe modelo, avaliação, leaderboard, explicabilidade, perfil de
+distribuição, resumo do Optuna, ambiente, eventos de treinamento e manifesto. O arquivo
+`predictions.csv` permanece exclusivamente local porque contém `id`, classe real e
+resultado por registro. O tracking não recebe dados raw, credenciais ou exemplos
+sensíveis.
+
+### Logs operacionais e trilha de auditoria
+
+O CLI escreve no console eventos estruturados de carga, contrato, split, catálogo,
+validação de candidatos, cada fold, seleção, Optuna, fit final, holdout,
+explicabilidade, artefatos, MLflow e publicação. Use `--log-level DEBUG`, `INFO`,
+`WARNING` ou `ERROR` nos entry points de treinamento.
+
+Os mesmos eventos ficam em `training_events.jsonl`, um JSON por linha com timestamp
+UTC, `run_id`, etapa, estado, duração e métricas seguras. Esse arquivo entra no
+manifesto com SHA-256 e também é enviado ao run pai do MLflow.
+
+## 11. Explicabilidade
+
+O vencedor recebe permutation importance por feature raw em amostra limitada. O
+relatório destaca Weight, Height, BMI, Gender e Age quando relevantes. SHAP é detectado
+como integração opcional; pipelines genéricas incompatíveis são marcadas explicitamente
+e não recebem explicações fabricadas.
+
+## 12. Artefatos e inferência
+
+Cada execução é publicada atomicamente em `artifacts/runs/<run_id>/`:
 
 ```text
 model.joblib
 evaluation.json
+leaderboard.csv
+predictions.csv
+explainability.json
+explainability.png
+distribution_profile.json
+optuna.json
+environment.json
+training_events.jsonl
 manifest.json
 ```
 
-O manifesto registra dataset, configuração, tamanhos das partições, candidato escolhido
-e SHA-256 dos artefatos. O status de MLflow permanece
-`not_logged_policy_pending` e nenhuma promoção é solicitada automaticamente.
+`predictions.csv` preserva `id`, classe real no holdout, classe prevista e sete
+probabilidades. O manifesto contém hashes e o contrato de inferência. A serialização é
+recarregada e comparada com o modelo em memória antes da publicação.
 
-## Execução
+Inferência batch:
 
-Com o ambiente virtual ativo e o snapshot inicializado:
+```bash
+obesity-predict \
+  --run-directory artifacts/runs/<run_id> \
+  --input data/processed/inference.csv \
+  --output data/predictions/predictions.csv
+```
+
+## 13. Estrutura modular
+
+```text
+configs/                 defaults e plano de experimentos
+src/obesity_risk_pipeline/
+  config/                configuração tipada
+  data/                  contrato, validação, split e drift
+  features/              engenharia, ablações e preprocessing
+  models/                catálogo, métricas, CV, Optuna, tracking e explicabilidade
+  pipelines/             orquestração de treino
+  inference/             carregamento e predição batch
+tests/unit/              contratos, leakage, paridade e reprodutibilidade
+```
+
+## 14. Critérios para um modelo final
+
+O vencedor estatístico ainda não está promovido. A decisão humana deve considerar
+macro F1, estabilidade, recall das sete classes, erro ordinal, log loss, dependência de
+proxies/Gender, interpretação, latência e coerência com a entrada real. Sem consumidor,
+custo de erro e contrato de produção aprovados, o status permanece
+`promotion_status=not_requested`.
+
+## 15. Execução recomendada
+
+Automação completa no Windows/PowerShell:
+
+```powershell
+# smoke test: venv + dependências + ingestão idempotente + treino
+.\scripts\run_training_pipeline.ps1
+
+# catálogo completo com quality gate e tracking local
+.\scripts\run_training_pipeline.ps1 `
+  -Mode full `
+  -RunTests `
+  -StartInfrastructure `
+  -EnableMlflow `
+  -OptunaTrials 20
+```
+
+O script usa diretamente o Python do `.venv`, valida cada código de saída e interrompe
+na primeira falha. `-SkipInstall` torna execuções subsequentes mais rápidas. A etapa de
+ingestão continua idempotente: snapshot existente só é reutilizado após validação.
+
+Em ambientes já preparados, use diretamente o entry point multiplataforma:
+
+```bash
+obesity-training-pipeline --mode quick
+obesity-training-pipeline --mode full --config configs/experiments.json
+```
+
+Execução manual equivalente:
 
 ```bash
 obesity-initialize
 obesity-train-baselines
+obesity-run-experiments --config configs/experiments.json
 ```
 
-Sobrescritas explícitas:
+O primeiro treino é um smoke test rápido. O segundo executa o catálogo completo e pode
+demandar vários minutos. Os resultados servem a aprendizado, benchmarking e
+demonstração de MLOps, nunca diagnóstico clínico.
 
-```bash
-obesity-train-baselines \
-  --test-size 0.20 \
-  --validation-size 0.20 \
-  --random-state 42 \
-  --output-root artifacts/runs
-```
+## Referências técnicas
 
-Os resultados não são um diagnóstico e não estão autorizados para produção. MLflow,
-Optuna, calibração pós-treino, gates de promoção e inferência pertencem às próximas
-fatias.
+- [Obesity Risk Dataset — Kaggle](https://www.kaggle.com/datasets/jpkochar/obesity-risk-dataset)
+- [StratifiedKFold — scikit-learn](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html)
+- [CatBoostClassifier e categorias nativas](https://catboost.ai/docs/en/concepts/python-reference_catboostclassifier)
+- [MLflow Python API](https://mlflow.org/docs/latest/api_reference/python_api/index.html)

@@ -1,0 +1,9 @@
+# Dependências mínimas para ingestão, treino governado, testes e artefatos locais.
+pandas>=2.2.0,<2.4.0
+numpy>=1.26.0,<2.4.0
+scikit-learn>=1.4.0,<1.8.0
+joblib>=1.3.0
+matplotlib>=3.8.0,<3.11.0
+python-dotenv>=1.0.0
+kaggle>=2.2.1
+pytest>=8.0.0,<9.0.0

@@ -221,6 +221,8 @@ __marimo__/
 # but dataset contents and temporary downloads must not be committed to Git.
 /data/raw/
 /data/staging/
+/data/processed/
+/data/predictions/
 
 # Generated model runs and governed reports are local artifacts, not source code.
 /artifacts/

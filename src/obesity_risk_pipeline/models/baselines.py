@@ -88,7 +88,9 @@ def build_baseline_candidates(random_state: int) -> Mapping[str, BaselineCandida
                     ("preprocessor", build_preprocessor(MODEL_FEATURES)),
                     (
                         "classifier",
-                        DummyClassifier(strategy="stratified", random_state=random_state),
+                        DummyClassifier(
+                            strategy="stratified", random_state=random_state
+                        ),
                     ),
                 )
             ),

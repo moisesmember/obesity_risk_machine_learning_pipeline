@@ -1,35 +1,53 @@
-"""CLI for the governed baseline-training slice."""
+"""Commands for complete experiments and the fast compatibility baseline."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
 from obesity_risk_pipeline.config.modeling import load_modeling_settings
+from obesity_risk_pipeline.config.experiments import load_experiment_plan
 from obesity_risk_pipeline.data.modeling import ModelingDataError
-from obesity_risk_pipeline.pipelines.training import train_baselines
+from obesity_risk_pipeline.pipelines.training import run_experiments, train_baselines
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Train governed obesity baselines and evaluate the winner on test."
-    )
+    parser = argparse.ArgumentParser(description="Run governed obesity experiments.")
     parser.add_argument("--dataset-path", type=Path)
     parser.add_argument("--output-root", type=Path)
-    parser.add_argument("--test-size", type=float)
-    parser.add_argument("--validation-size", type=float)
+    parser.add_argument("--holdout-size", type=float)
+    parser.add_argument("--cv-folds", type=int)
     parser.add_argument("--random-state", type=int)
+    parser.add_argument("--optuna-trials", type=int)
+    parser.add_argument("--enable-mlflow", action="store_true")
+    parser.add_argument("--experiments", help="Comma-separated experiment names")
+    parser.add_argument("--models", help="Comma-separated model names")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="External experiment/model plan",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run baseline training and return a process-compatible status code."""
+    """Run the complete requested catalog unless explicitly filtered."""
 
+    return _execute(argv, fast_baselines=False)
+
+
+def baseline_main(argv: Sequence[str] | None = None) -> int:
+    """Run a bounded baseline slice for fast local verification."""
+
+    return _execute(argv, fast_baselines=True)
+
+
+def _execute(argv: Sequence[str] | None, *, fast_baselines: bool) -> int:
     args = _parser().parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
         from dotenv import load_dotenv
 
@@ -40,33 +58,50 @@ def main(argv: Sequence[str] | None = None) -> int:
             for name, value in (
                 ("dataset_path", args.dataset_path),
                 ("output_root", args.output_root),
-                ("test_size", args.test_size),
-                ("validation_size", args.validation_size),
+                ("holdout_size", args.holdout_size),
+                ("cv_folds", args.cv_folds),
                 ("random_state", args.random_state),
+                ("optuna_trials", args.optuna_trials),
             )
             if value is not None
         }
-        if overrides:
-            settings = replace(settings, **overrides)
-        result = train_baselines(settings)
-    except (ModelingDataError, OSError, ValueError) as exc:
-        logging.getLogger(__name__).error("Baseline training failed: %s", exc)
+        if args.enable_mlflow:
+            overrides["mlflow_enabled"] = True
+        settings = replace(settings, **overrides) if overrides else settings
+        if fast_baselines:
+            result = train_baselines(settings)
+        else:
+            default_config = Path("configs/experiments.json")
+            if args.config is not None:
+                plan = load_experiment_plan(args.config)
+            elif default_config.is_file():
+                plan = load_experiment_plan(default_config)
+            else:
+                plan = None
+            experiments = (
+                tuple(args.experiments.split(","))
+                if args.experiments
+                else plan.experiments if plan else None
+            )
+            models = (
+                tuple(args.models.split(","))
+                if args.models
+                else plan.models if plan else None
+            )
+            result = run_experiments(
+                settings, experiment_names=experiments, model_names=models
+            )
+    except (ModelingDataError, OSError, ValueError, RuntimeError) as exc:
+        logging.error("Training failed: %s", exc)
         return 1
-
-    print(
-        json.dumps(
-            {
-                "run_id": result.run_id,
-                "selected_candidate": result.selected_candidate,
-                "validation_macro_f1": result.validation_reports[
-                    result.selected_candidate
-                ].macro_f1,
-                "test_macro_f1": result.test_report.macro_f1,
-                "run_directory": str(result.run_directory),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
+    selected_cv = result.cv_reports[result.selected_candidate]
+    logging.info(
+        "run_id=%s selected=%s cv_macro_f1=%.6f holdout_macro_f1=%.6f directory=%s",
+        result.run_id,
+        result.selected_candidate,
+        selected_cv.metric_mean["macro_f1"],
+        result.holdout_report.macro_f1,
+        result.run_directory,
     )
     return 0
 
